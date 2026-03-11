@@ -264,13 +264,14 @@ function ReviewSheet({ location, onClose, onSubmit }) {
 
 /* ── DETAIL SCREEN ── */
 function DetailScreen({ location, onBack }) {
-  const [reviews,setReviews] = useState([]);
-  const [loading,setLoading] = useState(true);
-  const [ageF,setAgeF]       = useState("All ages");
-  const [natF,setNatF]       = useState("All origins");
-  const [styleF,setStyleF]   = useState("All styles");
+  const [reviews,setReviews]   = useState([]);
+  const [loading,setLoading]   = useState(true);
+  const [ageF,setAgeF]         = useState("All ages");
+  const [natF,setNatF]         = useState("All origins");
+  const [styleF,setStyleF]     = useState("All styles");
   const [showSheet,setShowSheet] = useState(false);
-  const [toast,setToast]     = useState(false);
+  const [toast,setToast]       = useState(false);
+  const [stats,setStats]       = useState({avg_rating:location.avg_rating, review_count:location.review_count});
 
   useEffect(()=>{
     (async()=>{
@@ -286,7 +287,11 @@ function DetailScreen({ location, onBack }) {
     const {data} = await supabase.from("reviews").select("*").eq("location_id",location.id).order("created_at",{ascending:false});
     setReviews(data||[]);
   };
-  const handleSubmit = async () => { await loadReviews(); setToast(true); setTimeout(()=>setToast(false),3500); };
+  const loadStats = async () => {
+    const {data} = await supabase.from("locations").select("avg_rating,review_count").eq("id",location.id).single();
+    if (data) setStats({avg_rating:data.avg_rating, review_count:data.review_count});
+  };
+  const handleSubmit = async () => { await Promise.all([loadReviews(), loadStats()]); setToast(true); setTimeout(()=>setToast(false),3500); };
 
   return (
     <>
@@ -300,8 +305,8 @@ function DetailScreen({ location, onBack }) {
           <div className="detail-region">{location.region}</div>
           <div className="detail-title">{location.name}</div>
           <div className="detail-stats">
-            <div className="stat-item"><div className="stat-stars"><Stars n={Math.round(location.avg_rating)} size="1rem"/></div><div className="stat-label">{location.avg_rating} avg</div></div>
-            <div className="stat-item"><div className="stat-value">{location.review_count}</div><div className="stat-label">Reviews</div></div>
+            <div className="stat-item"><div className="stat-stars"><Stars n={Math.round(stats.avg_rating)} size="1rem"/></div><div className="stat-label">{stats.avg_rating} avg</div></div>
+            <div className="stat-item"><div className="stat-value">{stats.review_count}</div><div className="stat-label">Reviews</div></div>
             <div className="dest-tags" style={{marginTop:0}}>{(location.tags||[]).map(t=><span key={t} className="tag">{t}</span>)}</div>
           </div>
         </div>
