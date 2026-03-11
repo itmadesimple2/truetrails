@@ -1,0 +1,9 @@
+[build]
+  base = "truetrails"
+  command = "npm run build"
+  publish = "truetrails/dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
