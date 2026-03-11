@@ -1,7 +1,6 @@
 [build]
-  base = "truetrails"
   command = "npm run build"
-  publish = "truetrails/dist"
+  publish = "dist"
 
 [[redirects]]
   from = "/*"
