@@ -184,7 +184,10 @@ function AISummary({ location, reviews, ageFilter, natFilter }) {
 
 /* ── REVIEW SHEET ── */
 function ReviewSheet({ location, onClose, onSubmit }) {
-  const [form, setForm] = useState({name:"",age:"",nationality:"",travelStyle:"Couple",rating:0,title:"",body:"",youtube:""});
+  const [form, setForm] = useState({name:"",age:"",nationality:"",travelStyle:"Couple",rating:0,title:"",body:"",youtube:"",imageUrl:""});
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageMode, setImageMode] = useState("upload"); // "upload" or "link"
   const [hover, setHover] = useState(0);
   const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
@@ -195,14 +198,21 @@ function ReviewSheet({ location, onClose, onSubmit }) {
     setSaving(true);
     setSubmitError(null);
     const initials = form.name.trim().split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
-    const payload = {location_id:location.id,name:form.name,initials,age:form.age,nationality:form.nationality,travel_style:form.travelStyle,rating:form.rating,title:form.title,body:form.body,youtube:form.youtube||null,verified:false};
-    console.log("Inserting:", payload);
+    let finalImageUrl = form.imageUrl || null;
+    if (imageFile) {
+      const ext = imageFile.name.split(".").pop();
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("review-images").upload(path, imageFile, { contentType: imageFile.type });
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from("review-images").getPublicUrl(path);
+        finalImageUrl = urlData.publicUrl;
+      }
+    }
+    const payload = {location_id:location.id,name:form.name,initials,age:form.age,nationality:form.nationality,travel_style:form.travelStyle,rating:form.rating,title:form.title,body:form.body,youtube:form.youtube||null,image_url:finalImageUrl,verified:false};
     const result = await supabase.from("reviews").insert([payload]);
-    console.log("Result:", JSON.stringify(result));
     setSaving(false);
     if (!result.error) {
-      const fakeReview = {...payload, id: Date.now(), created_at: new Date().toISOString()};
-      onSubmit(fakeReview);
+      onSubmit();
       onClose();
     } else {
       setSubmitError(result.error?.message || result.error?.code || JSON.stringify(result.error) || "Unknown error");
@@ -228,6 +238,23 @@ function ReviewSheet({ location, onClose, onSubmit }) {
         <div className="form-group"><label className="form-label">Your Rating</label><div className="star-row">{[1,2,3,4,5].map(n=><button key={n} className={`star-tap ${n<=(hover||form.rating)?"lit":""}`} onClick={()=>set("rating",n)} onMouseEnter={()=>setHover(n)} onMouseLeave={()=>setHover(0)}>★</button>)}</div></div>
         <div className="form-group"><label className="form-label">Review Title</label><input className="form-input" placeholder="Sum up your honest experience" value={form.title} onChange={e=>set("title",e.target.value)}/></div>
         <div className="form-group"><div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:"0.4rem"}}><label className="form-label" style={{marginBottom:0}}>Your Review</label><span style={{fontSize:"0.65rem",color:form.body.length>=30?"var(--sage)":"var(--terra2)",fontWeight:600}}>{form.body.length>=30?"✓ Good length":`${30-form.body.length} more chars needed`}</span></div><textarea className="form-textarea" placeholder="Share what you genuinely experienced — good and bad. Practical details other travellers your age would value." value={form.body} onChange={e=>set("body",e.target.value)} rows={5}/></div>
+        <div className="form-group">
+          <label className="form-label">Photo (optional)</label>
+          <div style={{display:"flex",gap:"0.5rem",marginBottom:"0.6rem"}}>
+            <button type="button" onClick={()=>setImageMode("upload")} style={{flex:1,padding:"0.45rem",borderRadius:"8px",border:`1.5px solid ${imageMode==="upload"?"var(--terra)":"var(--border)"}`,background:imageMode==="upload"?"var(--terra)":"var(--raised)",color:imageMode==="upload"?"white":"var(--muted)",fontSize:"0.75rem",fontFamily:"'Outfit',sans-serif",cursor:"pointer",fontWeight:600}}>📷 Upload photo</button>
+            <button type="button" onClick={()=>setImageMode("link")} style={{flex:1,padding:"0.45rem",borderRadius:"8px",border:`1.5px solid ${imageMode==="link"?"var(--terra)":"var(--border)"}`,background:imageMode==="link"?"var(--terra)":"var(--raised)",color:imageMode==="link"?"white":"var(--muted)",fontSize:"0.75rem",fontFamily:"'Outfit',sans-serif",cursor:"pointer",fontWeight:600}}>🔗 Paste link</button>
+          </div>
+          {imageMode==="upload" ? (
+            <div>
+              <input type="file" accept="image/*" id="img-upload" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f){setImageFile(f);setImagePreview(URL.createObjectURL(f))}}}/>
+              <label htmlFor="img-upload" style={{display:"block",padding:"0.7rem",background:"var(--raised)",border:"1.5px dashed var(--border)",borderRadius:"10px",textAlign:"center",cursor:"pointer",fontSize:"0.8rem",color:"var(--muted)"}}>
+                {imagePreview ? <img src={imagePreview} style={{width:"100%",maxHeight:"140px",objectFit:"cover",borderRadius:"6px"}}/> : "Tap to choose a photo from your camera roll"}
+              </label>
+            </div>
+          ) : (
+            <input className="form-input" placeholder="https://photos.google.com/… or any image URL" value={form.imageUrl} onChange={e=>set("imageUrl",e.target.value)}/>
+          )}
+        </div>
         <div className="form-group"><label className="form-label">YouTube / Video Link (optional)</label><input className="form-input" placeholder="https://youtube.com/…" value={form.youtube} onChange={e=>set("youtube",e.target.value)}/></div>
         {submitError && <div style={{background:"#3a1a1a",border:"1px solid #8a3030",borderRadius:"10px",padding:"0.85rem",fontSize:"0.78rem",color:"#f08080",marginTop:"0.75rem",wordBreak:"break-all"}}>⚠️ Error: {submitError}</div>}<button className="submit-btn" disabled={!valid||saving} onClick={submit}>{saving?"Saving…":"Submit Honest Review"}</button>
       </div>
@@ -294,7 +321,7 @@ function DetailScreen({ location, onBack }) {
             {filtered.map(r=>(
               <div key={r.id} className="review-card slide-up">
                 <div className="rc-header">
-                  <div className="rc-left"><div className="avatar" style={{background:avatarColor(r.initials)}}>{r.initials}</div><div><div className="rc-name">{r.name}</div><div className="rc-meta"><span>{r.nationality}</span><span>·</span><span>{r.age}</span><span>·</span><span>{r.travel_style}</span></div></div></div>
+                  <div className="rc-left"><div style={{position:"relative",flexShrink:0}}><div className="avatar" style={{background:avatarColor(r.initials)}}>{r.initials}</div>{r.image_url&&<img src={r.image_url} style={{position:"absolute",bottom:"-2px",right:"-2px",width:"22px",height:"22px",borderRadius:"50%",objectFit:"cover",border:"2px solid var(--surface)"}} onError={e=>e.target.style.display="none"}/>}</div><div><div className="rc-name">{r.name}</div><div className="rc-meta"><span>{r.nationality}</span><span>·</span><span>{r.age}</span><span>·</span><span>{r.travel_style}</span></div></div></div>
                   <div className="rc-right"><div className="rc-stars"><Stars n={r.rating}/></div><div className="rc-date">{formatDate(r.created_at)}</div></div>
                 </div>
                 <div className="rc-title">{r.title}</div>
