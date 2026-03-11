@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase.js";
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Outfit:wght@300;400;500;600&display=swap');`;
@@ -141,6 +141,25 @@ body { font-family: 'Outfit', sans-serif; background: #0f0e0c; color: #f2ede4; m
 .nsb-text { font-size:0.75rem; color:var(--muted); line-height:1.6; }
 .slide-up { animation:slideUp 0.28s cubic-bezier(0.22,1,0.36,1) both; }
 @keyframes slideUp { from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)} }
+.carousel-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:600; display:flex; flex-direction:column; }
+.carousel-topbar { display:flex; align-items:center; justify-content:space-between; padding:calc(var(--safe-top) + 0.75rem) 1.25rem 0.75rem; flex-shrink:0; }
+.carousel-counter { font-size:0.8rem; color:rgba(255,255,255,0.6); font-weight:500; }
+.carousel-close { width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.1); border:none; color:white; font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.carousel-img-wrap { flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+.carousel-img { max-width:100%; max-height:100%; object-fit:contain; user-select:none; }
+.carousel-nav { position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.15); border:none; color:white; width:44px; height:44px; border-radius:50%; font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+.carousel-nav.prev { left:1rem; }
+.carousel-nav.next { right:1rem; }
+.carousel-info { padding:1rem 1.25rem calc(var(--safe-bot) + 1rem); flex-shrink:0; }
+.carousel-name { font-family:'Cormorant Garamond',serif; font-size:1.1rem; font-weight:600; color:white; margin-bottom:0.25rem; }
+.carousel-meta { font-size:0.75rem; color:rgba(255,255,255,0.5); margin-bottom:0.5rem; }
+.carousel-caption { font-size:0.82rem; color:rgba(255,255,255,0.75); line-height:1.65; }
+.carousel-dots { display:flex; gap:0.4rem; justify-content:center; padding:0.75rem 0 0; }
+.carousel-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.3); transition:background 0.2s; }
+.carousel-dot.active { background:var(--terra2); }
+.review-photo-strip { display:flex; gap:0.5rem; margin-top:0.75rem; overflow-x:auto; }
+.review-photo-thumb { width:72px; height:72px; border-radius:8px; object-fit:cover; flex-shrink:0; cursor:pointer; border:2px solid transparent; transition:border-color 0.15s; }
+.review-photo-thumb:active { border-color:var(--terra2); }
 .error-msg { margin:1rem 1.25rem; background:#3a1a1a; border:1px solid #6a2a2a; border-radius:10px; padding:0.85rem; font-size:0.8rem; color:#f08080; }
 `;
 
@@ -178,6 +197,50 @@ function AISummary({ location, reviews, ageFilter, natFilter }) {
       {state==="idle" && <><div className="ai-text" style={{opacity:0.6,marginBottom:"0.5rem"}}>Synthesise what reviewers honestly say — no marketing language.</div><button className="ai-gen-btn" onClick={generate}>Generate Summary</button></>}
       {state==="loading" && <div style={{display:"flex",alignItems:"center",gap:"0.75rem"}}><div className="dot-row"><span/><span/><span/></div><span style={{fontSize:"0.78rem",color:"var(--muted)"}}>Analysing…</span></div>}
       {state==="done" && <><div className="ai-text">{text}</div><button onClick={generate} style={{marginTop:"0.75rem",background:"none",border:"1px solid var(--border)",color:"var(--muted)",padding:"0.4rem 0.8rem",fontSize:"0.7rem",cursor:"pointer",borderRadius:"6px",fontFamily:"'Outfit',sans-serif"}}>↺ Regenerate</button></>}
+    </div>
+  );
+}
+
+/* ── IMAGE CAROUSEL ── */
+function ImageCarousel({ images, startIndex=0, onClose }) {
+  const [idx, setIdx] = useState(startIndex);
+  const cur = images[idx];
+  const prev = () => setIdx(i => (i-1+images.length)%images.length);
+  const next = () => setIdx(i => (i+1)%images.length);
+
+  // Swipe support
+  const touchStart = useRef(null);
+  const onTouchStart = e => { touchStart.current = e.touches[0].clientX; };
+  const onTouchEnd = e => {
+    if (touchStart.current === null) return;
+    const diff = touchStart.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) diff > 0 ? next() : prev();
+    touchStart.current = null;
+  };
+
+  return (
+    <div className="carousel-overlay" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <div className="carousel-topbar">
+        <div className="carousel-counter">{idx+1} / {images.length}</div>
+        <button className="carousel-close" onClick={onClose}>✕</button>
+      </div>
+      <div className="carousel-img-wrap">
+        <img key={idx} className="carousel-img" src={cur.image_url} alt={cur.title}/>
+        {images.length > 1 && <>
+          <button className="carousel-nav prev" onClick={prev}>‹</button>
+          <button className="carousel-nav next" onClick={next}>›</button>
+        </>}
+      </div>
+      {images.length > 1 && (
+        <div className="carousel-dots">
+          {images.map((_,i) => <div key={i} className={`carousel-dot ${i===idx?"active":""}`} onClick={()=>setIdx(i)}/>)}
+        </div>
+      )}
+      <div className="carousel-info">
+        <div className="carousel-name">{cur.name}</div>
+        <div className="carousel-meta">{cur.nationality} · {cur.age} · {cur.travel_style}</div>
+        <div className="carousel-caption">{cur.title}</div>
+      </div>
     </div>
   );
 }
@@ -272,6 +335,7 @@ function DetailScreen({ location, onBack }) {
   const [showSheet,setShowSheet] = useState(false);
   const [toast,setToast]       = useState(false);
   const [stats,setStats]       = useState({avg_rating:location.avg_rating, review_count:location.review_count});
+  const [carousel,setCarousel] = useState(null); // {images, startIndex}
 
   useEffect(()=>{
     (async()=>{
@@ -331,6 +395,13 @@ function DetailScreen({ location, onBack }) {
                 </div>
                 <div className="rc-title">{r.title}</div>
                 <div className="rc-body">{r.body}</div>
+                {r.image_url && (
+                  <div className="review-photo-strip">
+                    <img className="review-photo-thumb" src={r.image_url} alt="Review photo"
+                      onClick={()=>setCarousel({images:filtered.filter(x=>x.image_url), startIndex:filtered.filter(x=>x.image_url).findIndex(x=>x.id===r.id)})}
+                      onError={e=>e.target.style.display="none"}/>
+                  </div>
+                )}
                 {r.youtube && <a className="yt-link" href={r.youtube} target="_blank" rel="noopener noreferrer">▶ Watch video review →</a>}
                 <div className="rc-footer">{r.verified&&<span className="verified-badge"><span className="v-dot"/>Verified Visit</span>}<span className="style-badge">{r.travel_style}</span></div>
               </div>
@@ -341,6 +412,7 @@ function DetailScreen({ location, onBack }) {
       <button className="fab" onClick={()=>setShowSheet(true)}>+</button>
       {showSheet && <ReviewSheet location={location} onClose={()=>setShowSheet(false)} onSubmit={handleSubmit}/>}
       {toast && <div className="toast">✓ Your review has been saved!</div>}
+      {carousel && <ImageCarousel images={carousel.images} startIndex={carousel.startIndex} onClose={()=>setCarousel(null)}/>}
     </>
   );
 }
