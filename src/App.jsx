@@ -161,6 +161,31 @@ body { font-family: 'Outfit', sans-serif; background: #0f0e0c; color: #f2ede4; m
 .review-photo-thumb { width:72px; height:72px; border-radius:8px; object-fit:cover; flex-shrink:0; cursor:pointer; border:2px solid transparent; transition:border-color 0.15s; }
 .review-photo-thumb:active { border-color:var(--terra2); }
 .error-msg { margin:1rem 1.25rem; background:#3a1a1a; border:1px solid #6a2a2a; border-radius:10px; padding:0.85rem; font-size:0.8rem; color:#f08080; }
+.auth-overlay { position:fixed; inset:0; background:var(--bg); z-index:700; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2rem 1.5rem; }
+.auth-logo { font-family:'Cormorant Garamond',serif; font-size:2rem; font-weight:700; color:var(--text); margin-bottom:0.35rem; }
+.auth-logo span { color:var(--terra2); font-style:italic; }
+.auth-tagline { font-size:0.78rem; color:var(--muted); margin-bottom:2.5rem; text-align:center; line-height:1.6; }
+.auth-card { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:1.75rem 1.5rem; width:100%; max-width:360px; }
+.auth-title { font-family:'Cormorant Garamond',serif; font-size:1.4rem; font-weight:700; color:var(--text); margin-bottom:0.25rem; }
+.auth-sub { font-size:0.78rem; color:var(--muted); margin-bottom:1.5rem; line-height:1.6; }
+.auth-divider { display:flex; align-items:center; gap:0.75rem; margin:1.25rem 0; }
+.auth-divider-line { flex:1; height:1px; background:var(--border); }
+.auth-divider-text { font-size:0.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; }
+.social-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:0.65rem; padding:0.8rem; border-radius:12px; border:1.5px solid var(--border); background:var(--raised); color:var(--text); font-family:'Outfit',sans-serif; font-size:0.88rem; font-weight:500; cursor:pointer; margin-bottom:0.65rem; transition:border-color 0.15s; }
+.social-btn:active { border-color:var(--terra); }
+.social-icon { font-size:1.1rem; }
+.auth-switch { text-align:center; margin-top:1.25rem; font-size:0.78rem; color:var(--muted); }
+.auth-switch-btn { color:var(--terra2); background:none; border:none; font-family:'Outfit',sans-serif; font-size:0.78rem; font-weight:600; cursor:pointer; padding:0; }
+.auth-error { background:#3a1a1a; border:1px solid #6a2a2a; border-radius:8px; padding:0.65rem 0.85rem; font-size:0.75rem; color:#f08080; margin-bottom:1rem; }
+.auth-success { background:#1a3a1f; border:1px solid #2a6a30; border-radius:8px; padding:0.65rem 0.85rem; font-size:0.75rem; color:#7adb84; margin-bottom:1rem; }
+.guest-btn { width:100%; background:none; border:none; color:var(--muted); font-family:'Outfit',sans-serif; font-size:0.78rem; cursor:pointer; padding:1rem 0 0; text-decoration:underline; }
+.sign-out-btn { width:100%; background:var(--raised); border:1px solid var(--border); border-radius:12px; padding:0.75rem; font-family:'Outfit',sans-serif; font-size:0.85rem; font-weight:500; color:var(--muted); cursor:pointer; margin-top:1rem; }
+.sign-out-btn:active { border-color:var(--terra); color:var(--terra); }
+.auth-required { background:var(--raised); border:1px solid var(--border); border-radius:16px; margin:1.5rem 1.25rem; padding:1.5rem; text-align:center; }
+.auth-required-icon { font-size:2rem; margin-bottom:0.75rem; }
+.auth-required-title { font-family:'Cormorant Garamond',serif; font-size:1.1rem; font-weight:600; color:var(--text); margin-bottom:0.4rem; }
+.auth-required-text { font-size:0.78rem; color:var(--muted); line-height:1.6; margin-bottom:1.25rem; }
+.auth-required-btn { display:inline-block; background:var(--terra); color:white; border:none; border-radius:10px; padding:0.65rem 1.5rem; font-family:'Outfit',sans-serif; font-size:0.85rem; font-weight:600; cursor:pointer; }
 `;
 
 const AGE_OPTS   = ["All ages","Under 35","35–49","50–54","55–64","65+"];
@@ -326,7 +351,7 @@ function ReviewSheet({ location, onClose, onSubmit }) {
 }
 
 /* ── DETAIL SCREEN ── */
-function DetailScreen({ location, onBack }) {
+function DetailScreen({ location, onBack, user, onSignIn }) {
   const [reviews,setReviews]   = useState([]);
   const [loading,setLoading]   = useState(true);
   const [ageF,setAgeF]         = useState("All ages");
@@ -409,7 +434,7 @@ function DetailScreen({ location, onBack }) {
           </div>
         )}
       </div>
-      <button className="fab" onClick={()=>setShowSheet(true)}>+</button>
+      <button className="fab" onClick={()=>{ if(user) setShowSheet(true); else onSignIn(); }} title={user?"Write a review":"Sign in to write a review"}>+</button>
       {showSheet && <ReviewSheet location={location} onClose={()=>setShowSheet(false)} onSubmit={handleSubmit}/>}
       {toast && <div className="toast">✓ Your review has been saved!</div>}
       {carousel && <ImageCarousel images={carousel.images} startIndex={carousel.startIndex} onClose={()=>setCarousel(null)}/>}
@@ -478,26 +503,137 @@ function ExploreScreen({ onSelectLocation }) {
   );
 }
 
+/* ── AUTH SCREEN ── */
+function AuthScreen({ onClose }) {
+  const [mode, setMode]       = useState("signin"); // signin | signup | check_email
+  const [email, setEmail]     = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  const handleGoogle = async () => {
+    setLoading(true); setError(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.href }
+    });
+    if (error) { setError(error.message); setLoading(false); }
+  };
+
+  const handleEmail = async () => {
+    if (!email || !password) { setError("Please enter your email and password."); return; }
+    setLoading(true); setError(null);
+    if (mode === "signup") {
+      const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.href } });
+      if (error) setError(error.message);
+      else { setMode("check_email"); setSuccess("Check your email for a confirmation link!"); }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setError(error.message);
+      else onClose();
+    }
+    setLoading(false);
+  };
+
+  if (mode === "check_email") return (
+    <div className="auth-overlay">
+      <div className="auth-logo">True<span>Trails</span></div>
+      <div className="auth-card" style={{textAlign:"center"}}>
+        <div style={{fontSize:"2.5rem",marginBottom:"1rem"}}>📧</div>
+        <div className="auth-title">Check your email</div>
+        <div className="auth-sub">We sent a confirmation link to <strong style={{color:"var(--terra2)"}}>{email}</strong>. Click it to activate your account then come back here to sign in.</div>
+        <button className="submit-btn" onClick={()=>setMode("signin")}>Back to Sign In</button>
+      </div>
+      <button className="guest-btn" onClick={onClose}>Continue as guest</button>
+    </div>
+  );
+
+  return (
+    <div className="auth-overlay">
+      <div className="auth-logo">True<span>Trails</span></div>
+      <div className="auth-tagline">Honest travel reviews — no sponsorships, no paid placements.</div>
+      <div className="auth-card">
+        <div className="auth-title">{mode==="signin"?"Welcome back":"Create account"}</div>
+        <div className="auth-sub">{mode==="signin"?"Sign in to write reviews and save favourites.":"Join TrueTrails — it's free and takes 30 seconds."}</div>
+        {error && <div className="auth-error">⚠️ {error}</div>}
+        <button className="social-btn" onClick={handleGoogle} disabled={loading}>
+          <span className="social-icon">🇬</span> Continue with Google
+        </button>
+        <div className="auth-divider"><div className="auth-divider-line"/><span className="auth-divider-text">or</span><div className="auth-divider-line"/></div>
+        <div className="form-group"><label className="form-label">Email</label><input className="form-input" type="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)}/></div>
+        <div className="form-group"><label className="form-label">Password</label><input className="form-input" type="password" placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)}/></div>
+        <button className="submit-btn" onClick={handleEmail} disabled={loading}>{loading?"Please wait…":mode==="signin"?"Sign In":"Create Account"}</button>
+        <div className="auth-switch">
+          {mode==="signin"?"Don't have an account? ":"Already have an account? "}
+          <button className="auth-switch-btn" onClick={()=>{setMode(mode==="signin"?"signup":"signin");setError(null);}}>
+            {mode==="signin"?"Sign up free":"Sign in"}
+          </button>
+        </div>
+      </div>
+      <button className="guest-btn" onClick={onClose}>Continue as guest →</button>
+    </div>
+  );
+}
+
 /* ── PROFILE SCREEN ── */
-function ProfileScreen() {
+function ProfileScreen({ user, onSignIn }) {
+  const [profile, setProfile] = useState({ display_name:"", age:"", nationality:"", travel_style:"Couple", youtube:"" });
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
+
+  useEffect(()=>{
+    if (!user) return;
+    (async()=>{
+      const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      if (data) setProfile({ display_name:data.display_name||"", age:data.age||"", nationality:data.nationality||"", travel_style:data.travel_style||"Couple", youtube:data.youtube||"" });
+    })();
+  },[user?.id]);
+
+  const saveProfile = async () => {
+    if (!user) return;
+    setSaving(true);
+    await supabase.from("profiles").upsert({ id:user.id, email:user.email, ...profile, updated_at:new Date().toISOString() });
+    setSaving(false); setSaved(true); setTimeout(()=>setSaved(false), 2500);
+  };
+
+  const signOut = async () => { await supabase.auth.signOut(); };
+
+  if (!user) return (
+    <div className="scroll-area"><div className="profile-wrap">
+      <div className="auth-required">
+        <div className="auth-required-icon">👤</div>
+        <div className="auth-required-title">Create a free account</div>
+        <div className="auth-required-text">Sign up to write reviews, upload photos, save favourites and build your reviewer profile.</div>
+        <button className="auth-required-btn" onClick={onSignIn}>Sign up or Sign in</button>
+      </div>
+      <div className="no-sponsorship-badge"><div className="nsb-icon">🛡️</div><div><div className="nsb-title">No-Sponsorship Pledge</div><div className="nsb-text">TrueTrails members pledge to never accept payment, free stays, or incentives in exchange for reviews.</div></div></div>
+    </div></div>
+  );
+
+  const initials = (profile.display_name||user.email||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
   return (
     <div className="scroll-area"><div className="profile-wrap">
-      <div className="section-head" style={{marginBottom:"1rem"}}>My Reviewer Profile</div>
+      <div className="section-head" style={{marginBottom:"1rem"}}>My Profile</div>
       <div className="profile-card">
-        <div className="profile-top"><div className="profile-avatar">MT</div><div><div className="profile-name">Margaret T.</div><div className="profile-sub">Member since 2024 · 3 reviews</div></div></div>
-        {[["Age Group","55–64"],["Nationality","Australian"],["Travel Style","Couple"],["YouTube / Blog","Not linked yet"]].map(([k,v])=><div key={k} className="info-row"><span className="info-key">{k}</span><span className="info-val">{v}</span></div>)}
+        <div className="profile-top">
+          <div className="profile-avatar">{initials}</div>
+          <div><div className="profile-name">{profile.display_name||"Set your name"}</div><div className="profile-sub">{user.email}</div></div>
+        </div>
       </div>
       <div className="no-sponsorship-badge"><div className="nsb-icon">🛡️</div><div><div className="nsb-title">No-Sponsorship Pledge</div><div className="nsb-text">You have pledged to never accept payment, free stays, or incentives in exchange for reviews on TrueTrails.</div></div></div>
       <div className="section-head">Edit Profile</div>
       <div style={{display:"flex",flexDirection:"column",gap:"0.9rem"}}>
-        <div className="form-group"><label className="form-label">Display Name</label><input className="form-input" defaultValue="Margaret T."/></div>
+        <div className="form-group"><label className="form-label">Display Name</label><input className="form-input" placeholder="e.g. Margaret T." value={profile.display_name} onChange={e=>setProfile(p=>({...p,display_name:e.target.value}))}/></div>
         <div className="form-row">
-          <div className="form-group"><label className="form-label">Age Group</label><select className="form-select" defaultValue="55–64">{["Under 35","35–49","50–54","55–64","65+"].map(a=><option key={a}>{a}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Nationality</label><select className="form-select" defaultValue="Australian">{NAT_OPTS.slice(1).map(n=><option key={n}>{n}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Age Group</label><select className="form-select" value={profile.age} onChange={e=>setProfile(p=>({...p,age:e.target.value}))}><option value="">Select…</option>{["Under 35","35–49","50–54","55–64","65+"].map(a=><option key={a}>{a}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Nationality</label><select className="form-select" value={profile.nationality} onChange={e=>setProfile(p=>({...p,nationality:e.target.value}))}><option value="">Select…</option>{NAT_OPTS.slice(1).map(n=><option key={n}>{n}</option>)}</select></div>
         </div>
-        <div className="form-group"><label className="form-label">Travel Style</label><select className="form-select" defaultValue="Couple">{STYLE_OPTS.slice(1).map(s=><option key={s}>{s}</option>)}</select></div>
-        <div className="form-group"><label className="form-label">YouTube / Blog URL (optional)</label><input className="form-input" placeholder="https://…"/></div>
-        <button className="submit-btn">Save Profile</button>
+        <div className="form-group"><label className="form-label">Travel Style</label><select className="form-select" value={profile.travel_style} onChange={e=>setProfile(p=>({...p,travel_style:e.target.value}))}>{STYLE_OPTS.slice(1).map(s=><option key={s}>{s}</option>)}</select></div>
+        <div className="form-group"><label className="form-label">YouTube / Blog URL (optional)</label><input className="form-input" placeholder="https://…" value={profile.youtube} onChange={e=>setProfile(p=>({...p,youtube:e.target.value}))}/></div>
+        {saved && <div className="auth-success">✓ Profile saved!</div>}
+        <button className="submit-btn" onClick={saveProfile} disabled={saving}>{saving?"Saving…":"Save Profile"}</button>
+        <button className="sign-out-btn" onClick={signOut}>Sign out</button>
       </div>
     </div></div>
   );
@@ -505,21 +641,45 @@ function ProfileScreen() {
 
 /* ── ROOT ── */
 export default function App() {
-  const [tab,setTab]           = useState("explore");
+  const [tab,setTab]                 = useState("explore");
   const [selectedLoc,setSelectedLoc] = useState(null);
+  const [user,setUser]               = useState(null);
+  const [authReady,setAuthReady]     = useState(false);
+  const [showAuth,setShowAuth]       = useState(false);
+
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{ setUser(session?.user||null); setAuthReady(true); });
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session)=>{ setUser(session?.user||null); setShowAuth(false); });
+    return ()=>subscription.unsubscribe();
+  },[]);
+
   const handleSelect = loc => { setSelectedLoc(loc); setTab("detail"); };
   const handleBack   = ()  => { setSelectedLoc(null); setTab("explore"); };
+
+  if (!authReady) return <><style>{FONTS+CSS}</style><div className="shell"><div className="status-bar"/><div className="loading-wrap" style={{height:"100dvh"}}><div className="dot-row"><span/><span/><span/></div></div></div></>;
+
   return (
     <>
       <style>{FONTS+CSS}</style>
       <div className="shell">
         <div className="status-bar"/>
-        {tab!=="detail" && <div className="topbar"><div className="topbar-logo">True<span>Trails</span></div><div className="topbar-right"><button className="icon-btn">🔔</button><button className="icon-btn">⚙️</button></div></div>}
-        {tab==="explore" && <ExploreScreen onSelectLocation={handleSelect}/>}
-        {tab==="detail"  && selectedLoc && <DetailScreen location={selectedLoc} onBack={handleBack}/>}
-        {tab==="profile" && <ProfileScreen/>}
+        {tab!=="detail" && (
+          <div className="topbar">
+            <div className="topbar-logo">True<span>Trails</span></div>
+            <div className="topbar-right">
+              {user
+                ? <button className="icon-btn" onClick={()=>setTab("profile")} title="Profile">👤</button>
+                : <button className="icon-btn" onClick={()=>setShowAuth(true)} style={{fontSize:"0.65rem",fontWeight:700,color:"var(--terra2)",width:"auto",padding:"0 0.75rem",borderRadius:"20px",whiteSpace:"nowrap"}}>Sign in</button>
+              }
+            </div>
+          </div>
+        )}
+        {tab==="explore" && <ExploreScreen onSelectLocation={handleSelect} user={user} onSignIn={()=>setShowAuth(true)}/>}
+        {tab==="detail"  && selectedLoc && <DetailScreen location={selectedLoc} onBack={handleBack} user={user} onSignIn={()=>setShowAuth(true)}/>}
+        {tab==="profile" && <ProfileScreen user={user} onSignIn={()=>setShowAuth(true)}/>}
         {tab!=="detail" && <div className="bottom-nav">{[{id:"explore",icon:"🗺️",label:"Explore"},{id:"profile",icon:"👤",label:"Profile"}].map(n=><button key={n.id} className={`nav-item ${tab===n.id?"active":""}`} onClick={()=>setTab(n.id)}><span className="nav-icon">{n.icon}</span><span className="nav-label">{n.label}</span></button>)}</div>}
       </div>
+      {showAuth && <AuthScreen onClose={()=>setShowAuth(false)}/>}
     </>
   );
 }
