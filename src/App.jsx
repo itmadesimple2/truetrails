@@ -141,6 +141,19 @@ body { font-family: 'Outfit', sans-serif; background: #0f0e0c; color: #f2ede4; m
 .nsb-text { font-size:0.75rem; color:var(--muted); line-height:1.6; }
 .slide-up { animation:slideUp 0.28s cubic-bezier(0.22,1,0.36,1) both; }
 @keyframes slideUp { from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)} }
+.dest-hero-img { width:80px; flex-shrink:0; object-fit:cover; height:100%; min-height:90px; }
+.dest-hero-placeholder { width:80px; flex-shrink:0; min-height:90px; display:flex; align-items:center; justify-content:center; font-size:2.2rem; background:var(--raised); }
+.detail-hero-img { width:100%; height:180px; object-fit:cover; display:block; }
+.detail-hero-img-wrap { position:relative; }
+.suggest-photo-btn { position:absolute; bottom:0.6rem; right:0.6rem; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:0.35rem 0.65rem; font-size:0.68rem; color:white; font-family:'Outfit',sans-serif; font-weight:600; cursor:pointer; backdrop-filter:blur(4px); }
+.suggest-tab-row { display:flex; gap:0; margin-bottom:1.25rem; border:1.5px solid var(--border); border-radius:10px; overflow:hidden; }
+.suggest-tab { flex:1; padding:0.6rem; background:var(--raised); border:none; font-family:'Outfit',sans-serif; font-size:0.78rem; font-weight:600; color:var(--muted); cursor:pointer; }
+.suggest-tab.active { background:var(--terra); color:white; }
+.suggest-pending { background:var(--raised); border:1px solid var(--border); border-radius:10px; padding:0.75rem 1rem; margin-top:0.5rem; }
+.suggest-pending-title { font-size:0.8rem; font-weight:600; color:var(--text); margin-bottom:0.2rem; }
+.suggest-pending-meta { font-size:0.68rem; color:var(--muted); }
+.suggest-btn { display:flex; align-items:center; gap:0.5rem; background:var(--raised); border:1.5px solid var(--border); border-radius:10px; padding:0.6rem 1rem; font-family:'Outfit',sans-serif; font-size:0.78rem; font-weight:600; color:var(--sub); cursor:pointer; margin:0 1.25rem 0.75rem; width:calc(100% - 2.5rem); }
+.suggest-btn:active { border-color:var(--terra); color:var(--terra); }
 .carousel-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:600; display:flex; flex-direction:column; }
 .carousel-topbar { display:flex; align-items:center; justify-content:space-between; padding:calc(var(--safe-top) + 0.75rem) 1.25rem 0.75rem; flex-shrink:0; }
 .carousel-counter { font-size:0.8rem; color:rgba(255,255,255,0.6); font-weight:500; }
@@ -234,6 +247,146 @@ function AISummary({ location, reviews, ageFilter, natFilter }) {
       {state==="idle" && <><div className="ai-text" style={{opacity:0.6,marginBottom:"0.5rem"}}>Synthesise what reviewers honestly say — no marketing language.</div><button className="ai-gen-btn" onClick={generate}>Generate Summary</button></>}
       {state==="loading" && <div style={{display:"flex",alignItems:"center",gap:"0.75rem"}}><div className="dot-row"><span/><span/><span/></div><span style={{fontSize:"0.78rem",color:"var(--muted)"}}>Analysing…</span></div>}
       {state==="done" && <><div className="ai-text">{text}</div><button onClick={generate} style={{marginTop:"0.75rem",background:"none",border:"1px solid var(--border)",color:"var(--muted)",padding:"0.4rem 0.8rem",fontSize:"0.7rem",cursor:"pointer",borderRadius:"6px",fontFamily:"'Outfit',sans-serif"}}>↺ Regenerate</button></>}
+    </div>
+  );
+}
+
+/* ── SUGGEST SHEET ── */
+function SuggestSheet({ location, user, onClose }) {
+  const [type, setType] = useState("experience"); // experience | destination
+  const [form, setForm] = useState({ title:"", description:"", region:"", tags:"" });
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState(null);
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const valid = form.title.length>2 && form.description.length>20 && (type==="experience" || form.region.length>2);
+
+  const submit = async () => {
+    setSaving(true); setError(null);
+    const { data:profile } = await supabase.from("profiles").select("username,display_name").eq("id",user.id).single();
+    const username = profile?.username ? "@"+profile.username : profile?.display_name || user.email;
+    const payload = {
+      user_id: user.id,
+      username,
+      type,
+      location_id: type==="experience" ? location.id : null,
+      location_name: type==="experience" ? location.name : form.title,
+      region: form.region || location.region,
+      title: form.title,
+      description: form.description,
+      tags: form.tags ? form.tags.split(",").map(t=>t.trim()).filter(Boolean) : [],
+      status: "pending"
+    };
+    const { error } = await supabase.from("suggestions").insert([payload]);
+    setSaving(false);
+    if (error) setError(error.message);
+    else setDone(true);
+  };
+
+  if (done) return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet" style={{textAlign:"center",padding:"2rem 1.25rem"}}>
+        <div style={{fontSize:"2.5rem",marginBottom:"1rem"}}>🙌</div>
+        <div className="sheet-title">Thanks for the suggestion!</div>
+        <div className="sheet-sub">Our team will review it and add it to TrueTrails if approved. We'll let you know.</div>
+        <button className="submit-btn" onClick={onClose}>Done</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet">
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0.9rem 0 0.5rem"}}>
+          <div style={{width:"40px",height:"4px",background:"var(--border)",borderRadius:"2px",margin:"0 auto"}}/>
+          <button onClick={onClose} style={{background:"var(--raised)",border:"1px solid var(--border)",borderRadius:"50%",width:"32px",height:"32px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--muted)",fontSize:"0.9rem",flexShrink:0,position:"absolute",right:"1.25rem"}}>✕</button>
+        </div>
+        <div className="sheet-title">Suggest Something</div>
+        <div className="sheet-sub">Help grow TrueTrails with destinations and experiences the community will love.</div>
+        <div className="suggest-tab-row">
+          <button className={`suggest-tab ${type==="experience"?"active":""}`} onClick={()=>setType("experience")}>✨ Experience at {location.name}</button>
+          <button className={`suggest-tab ${type==="destination"?"active":""}`} onClick={()=>setType("destination")}>🗺️ New Destination</button>
+        </div>
+        {type==="experience" ? (
+          <>
+            <div className="form-group"><label className="form-label">Experience Name</label><input className="form-input" placeholder="e.g. Sunrise hike to Mueller Hut" value={form.title} onChange={e=>set("title",e.target.value)}/></div>
+            <div className="form-group"><label className="form-label">Description</label><textarea className="form-textarea" placeholder="Describe the experience — what makes it special, best time to do it, tips for travellers your age…" value={form.description} onChange={e=>set("description",e.target.value)} rows={4}/></div>
+            <div className="form-group"><label className="form-label">Tags <span style={{color:"var(--muted)",fontWeight:400}}>(comma separated)</span></label><input className="form-input" placeholder="e.g. Hiking, Sunrise, Moderate difficulty" value={form.tags} onChange={e=>set("tags",e.target.value)}/></div>
+          </>
+        ) : (
+          <>
+            <div className="form-group"><label className="form-label">Destination Name</label><input className="form-input" placeholder="e.g. Fiordland National Park" value={form.title} onChange={e=>set("title",e.target.value)}/></div>
+            <div className="form-group"><label className="form-label">Region / Country</label><input className="form-input" placeholder="e.g. South Island, NZ" value={form.region} onChange={e=>set("region",e.target.value)}/></div>
+            <div className="form-group"><label className="form-label">Why it belongs on TrueTrails</label><textarea className="form-textarea" placeholder="What makes this destination special for travellers 50+? What should people know before they go?" value={form.description} onChange={e=>set("description",e.target.value)} rows={4}/></div>
+            <div className="form-group"><label className="form-label">Tags <span style={{color:"var(--muted)",fontWeight:400}}>(comma separated)</span></label><input className="form-input" placeholder="e.g. Nature, Hiking, Wildlife" value={form.tags} onChange={e=>set("tags",e.target.value)}/></div>
+          </>
+        )}
+        {error && <div className="auth-error">⚠️ {error}</div>}
+        <button className="submit-btn" onClick={submit} disabled={!valid||saving}>{saving?"Submitting…":"Submit Suggestion"}</button>
+      </div>
+    </div>
+  );
+}
+
+/* ── PHOTO SUGGEST SHEET ── */
+function PhotoSuggestSheet({ location, user, onClose }) {
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState(null);
+
+  const submit = async () => {
+    if (!imageFile) return;
+    setSaving(true); setError(null);
+    const { data:profile } = await supabase.from("profiles").select("username,display_name").eq("id",user.id).single();
+    const username = profile?.username ? "@"+profile.username : profile?.display_name || user.email;
+    const ext = imageFile.name.split(".").pop();
+    const path = `location-photos/${location.id}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("review-images").upload(path, imageFile, { contentType: imageFile.type });
+    if (upErr) { setError(upErr.message); setSaving(false); return; }
+    const { data: urlData } = supabase.storage.from("review-images").getPublicUrl(path);
+    const { error: dbErr } = await supabase.from("location_photos").insert([{
+      location_id: location.id, user_id: user.id, username, photo_url: urlData.publicUrl, status: "pending"
+    }]);
+    setSaving(false);
+    if (dbErr) setError(dbErr.message);
+    else setDone(true);
+  };
+
+  if (done) return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet" style={{textAlign:"center",padding:"2rem 1.25rem"}}>
+        <div style={{fontSize:"2.5rem",marginBottom:"1rem"}}>📸</div>
+        <div className="sheet-title">Photo submitted!</div>
+        <div className="sheet-sub">Thanks! Our team will review your photo and use it as the hero image for {location.name} if it's a great fit.</div>
+        <button className="submit-btn" onClick={onClose}>Done</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet">
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0.9rem 0 0.5rem"}}>
+          <div style={{width:"40px",height:"4px",background:"var(--border)",borderRadius:"2px",margin:"0 auto"}}/>
+          <button onClick={onClose} style={{background:"var(--raised)",border:"1px solid var(--border)",borderRadius:"50%",width:"32px",height:"32px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--muted)",fontSize:"0.9rem",flexShrink:0,position:"absolute",right:"1.25rem"}}>✕</button>
+        </div>
+        <div className="sheet-title">Suggest a Photo</div>
+        <div className="sheet-sub">Upload your best shot of <strong style={{color:"var(--terra2)"}}>{location.name}</strong>. If selected, it'll become the hero image for this destination.</div>
+        <div className="form-group">
+          <input type="file" accept="image/*" id="loc-photo-upload" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f){setImageFile(f);setImagePreview(URL.createObjectURL(f))}}}/>
+          <label htmlFor="loc-photo-upload" style={{display:"block",cursor:"pointer",borderRadius:"12px",overflow:"hidden",border:"2px dashed var(--border)"}}>
+            {imagePreview
+              ? <img src={imagePreview} style={{width:"100%",maxHeight:"220px",objectFit:"cover",display:"block"}}/>
+              : <div style={{padding:"2.5rem",textAlign:"center",color:"var(--muted)",fontSize:"0.82rem"}}>📷 Tap to choose your best photo of {location.name}</div>
+            }
+          </label>
+          {imagePreview && <div style={{fontSize:"0.68rem",color:"var(--muted)",marginTop:"0.4rem",textAlign:"center"}}>Looks great! Tap Submit to send for review.</div>}
+        </div>
+        {error && <div className="auth-error">⚠️ {error}</div>}
+        <button className="submit-btn" onClick={submit} disabled={!imageFile||saving}>{saving?"Uploading…":"Submit Photo"}</button>
+      </div>
     </div>
   );
 }
@@ -407,7 +560,9 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
   const [showSheet,setShowSheet] = useState(false);
   const [toast,setToast]       = useState(false);
   const [stats,setStats]       = useState({avg_rating:location.avg_rating, review_count:location.review_count});
-  const [carousel,setCarousel] = useState(null); // {images, startIndex}
+  const [carousel,setCarousel]   = useState(null);
+  const [showSuggest,setShowSuggest] = useState(false);
+  const [showPhotoSuggest,setShowPhotoSuggest] = useState(false);
 
   useEffect(()=>{
     (async()=>{
@@ -437,6 +592,15 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
         <button className="icon-btn" onClick={()=>setShowSheet(true)}>✏️</button>
       </div>
       <div className="scroll-area">
+        {location.hero_image_url && (
+          <div className="detail-hero-img-wrap">
+            <img className="detail-hero-img" src={location.hero_image_url} alt={location.name} onError={e=>e.target.parentElement.style.display="none"}/>
+            {user && <button className="suggest-photo-btn" onClick={()=>setShowPhotoSuggest(true)}>📷 Suggest better photo</button>}
+          </div>
+        )}
+        {!location.hero_image_url && user && (
+          <div style={{padding:"0.5rem 1.25rem 0"}}><button className="suggest-btn" onClick={()=>setShowPhotoSuggest(true)}>📷 Add a photo for this destination</button></div>
+        )}
         <div className="detail-hero">
           <div className="detail-region">{location.region}</div>
           <div className="detail-title">{location.name}</div>
@@ -481,10 +645,13 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
           </div>
         )}
       </div>
+      {user && <button className="suggest-btn" onClick={()=>setShowSuggest(true)}>💡 Suggest a new destination or experience</button>}
       <button className="fab" onClick={()=>{ if(user) setShowSheet(true); else onSignIn(); }} title={user?"Write a review":"Sign in to write a review"}>+</button>
       {showSheet && <ReviewSheet location={location} onClose={()=>setShowSheet(false)} onSubmit={handleSubmit} user={user}/>}
       {toast && <div className="toast">✓ Your review has been saved!</div>}
       {carousel && <ImageCarousel images={carousel.images} startIndex={carousel.startIndex} onClose={()=>setCarousel(null)}/>}
+      {showSuggest && <SuggestSheet location={location} user={user} onClose={()=>setShowSuggest(false)}/>}
+      {showPhotoSuggest && <PhotoSuggestSheet location={location} user={user} onClose={()=>setShowPhotoSuggest(false)}/>}
     </>
   );
 }
