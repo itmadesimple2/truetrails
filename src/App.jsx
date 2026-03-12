@@ -189,6 +189,10 @@ body { font-family: 'Outfit', sans-serif; background: #0f0e0c; color: #f2ede4; m
 .username-status.err { color:var(--terra2); }
 .username-status.checking { color:var(--muted); }
 .username-setup-overlay { position:fixed; inset:0; background:var(--bg); z-index:800; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2rem 1.5rem; }
+.profile-avatar-wrap { position:relative; width:80px; height:80px; flex-shrink:0; }
+.profile-avatar-img { width:80px; height:80px; border-radius:50%; object-fit:cover; border:2px solid var(--border); }
+.profile-avatar-edit { position:absolute; bottom:0; right:0; width:26px; height:26px; border-radius:50%; background:var(--terra); border:2px solid var(--surface); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.7rem; }
+.review-avatar-img { width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid var(--border); flex-shrink:0; }
 .auth-required { background:var(--raised); border:1px solid var(--border); border-radius:16px; margin:1.5rem 1.25rem; padding:1.5rem; text-align:center; }
 .auth-required-icon { font-size:2rem; margin-bottom:0.75rem; }
 .auth-required-title { font-family:'Cormorant Garamond',serif; font-size:1.1rem; font-weight:600; color:var(--text); margin-bottom:0.4rem; }
@@ -281,7 +285,7 @@ function ImageCarousel({ images, startIndex=0, onClose }) {
 /* ── REVIEW SHEET ── */
 function ReviewSheet({ location, onClose, onSubmit, user }) {
   const [profile, setProfileData] = useState(null);
-  const [form, setForm] = useState({name:"",age:"",nationality:"",travelStyle:"Couple",rating:0,title:"",body:"",youtube:"",imageUrl:""});
+  const [form, setForm] = useState({name:"",age:"",nationality:"",travelStyle:"Couple",rating:0,title:"",body:"",youtube:"",imageUrl:"",avatarUrl:""});
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [imageMode, setImageMode] = useState("upload");
@@ -303,6 +307,7 @@ function ReviewSheet({ location, onClose, onSubmit, user }) {
           age: data.age || f.age,
           nationality: data.nationality || f.nationality,
           travelStyle: data.travel_style || f.travelStyle,
+          avatarUrl: data.avatar_url || "",
         }));
       }
     })();
@@ -325,7 +330,7 @@ function ReviewSheet({ location, onClose, onSubmit, user }) {
         finalImageUrl = urlData.publicUrl;
       }
     }
-    const payload = {location_id:location.id,name:form.name,initials,age:form.age,nationality:form.nationality,travel_style:form.travelStyle,rating:form.rating,title:form.title,body:form.body,youtube:form.youtube||null,image_url:finalImageUrl,verified:false};
+    const payload = {location_id:location.id,name:form.name,initials,age:form.age,nationality:form.nationality,travel_style:form.travelStyle,rating:form.rating,title:form.title,body:form.body,youtube:form.youtube||null,image_url:finalImageUrl,avatar_url:form.avatarUrl||null,verified:false};
     const result = await supabase.from("reviews").insert([payload]);
     setSaving(false);
     if (!result.error) {
@@ -454,7 +459,7 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
             {filtered.map(r=>(
               <div key={r.id} className="review-card slide-up">
                 <div className="rc-header">
-                  <div className="rc-left"><div style={{position:"relative",flexShrink:0}}><div className="avatar" style={{background:avatarColor(r.initials)}}>{r.initials}</div>{r.image_url&&<img src={r.image_url} style={{position:"absolute",bottom:"-2px",right:"-2px",width:"22px",height:"22px",borderRadius:"50%",objectFit:"cover",border:"2px solid var(--surface)"}} onError={e=>e.target.style.display="none"}/>}</div><div><div className="rc-name">{r.name}</div><div className="rc-meta"><span>{r.nationality}</span><span>·</span><span>{r.age}</span><span>·</span><span>{r.travel_style}</span></div></div></div>
+                  <div className="rc-left"><div style={{position:"relative",flexShrink:0}}>{r.avatar_url ? <img className="review-avatar-img" src={r.avatar_url} alt={r.initials} onError={e=>{e.target.style.display="none"}}/> : <div className="avatar" style={{background:avatarColor(r.initials)}}>{r.initials}</div>}{r.image_url&&<img src={r.image_url} style={{position:"absolute",bottom:"-2px",right:"-2px",width:"22px",height:"22px",borderRadius:"50%",objectFit:"cover",border:"2px solid var(--surface)"}} onError={e=>e.target.style.display="none"}/>}</div><div><div className="rc-name">{r.name}</div><div className="rc-meta"><span>{r.nationality}</span><span>·</span><span>{r.age}</span><span>·</span><span>{r.travel_style}</span></div></div></div>
                   <div className="rc-right"><div className="rc-stars"><Stars n={r.rating}/></div><div className="rc-date">{formatDate(r.created_at)}</div></div>
                 </div>
                 <div className="rc-title">{r.title}</div>
@@ -652,7 +657,9 @@ async function checkUsername(username) {
 
 /* ── PROFILE SCREEN ── */
 function ProfileScreen({ user, onSignIn }) {
-  const [profile, setProfile] = useState({ username:"", display_name:"", age:"", nationality:"", travel_style:"Couple", youtube:"" });
+  const [profile, setProfile] = useState({ username:"", display_name:"", age:"", nationality:"", travel_style:"Couple", youtube:"", avatar_url:"" });
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [usernameInput, setUsernameInput] = useState("");
@@ -665,7 +672,7 @@ function ProfileScreen({ user, onSignIn }) {
     (async()=>{
       const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (data) {
-        setProfile({ username:data.username||"", display_name:data.display_name||"", age:data.age||"", nationality:data.nationality||"", travel_style:data.travel_style||"Couple", youtube:data.youtube||"" });
+        setProfile({ username:data.username||"", display_name:data.display_name||"", age:data.age||"", nationality:data.nationality||"", travel_style:data.travel_style||"Couple", youtube:data.youtube||"", avatar_url:data.avatar_url||"" });
         setUsernameInput(data.username||"");
       }
     })();
@@ -690,9 +697,20 @@ function ProfileScreen({ user, onSignIn }) {
     if (!user) return;
     if (usernameInput && usernameInput !== profile.username && (!usernameStatus || !usernameStatus.ok)) return;
     setSaving(true);
-    const updates = { id:user.id, email:user.email, ...profile, username:usernameInput||null, updated_at:new Date().toISOString() };
+    let avatarUrl = profile.avatar_url;
+    if (avatarFile) {
+      const ext = avatarFile.name.split(".").pop();
+      const path = `avatars/${user.id}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("review-images").upload(path, avatarFile, { contentType: avatarFile.type, upsert: true });
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from("review-images").getPublicUrl(path);
+        avatarUrl = urlData.publicUrl;
+      }
+    }
+    const updates = { id:user.id, email:user.email, ...profile, avatar_url:avatarUrl, username:usernameInput||null, updated_at:new Date().toISOString() };
     await supabase.from("profiles").upsert(updates);
-    setProfile(p=>({...p, username:usernameInput}));
+    setProfile(p=>({...p, username:usernameInput, avatar_url:avatarUrl}));
+    setAvatarFile(null);
     setSaving(false); setSaved(true); setTimeout(()=>setSaved(false), 2500);
   };
 
@@ -717,10 +735,18 @@ function ProfileScreen({ user, onSignIn }) {
       <div className="section-head" style={{marginBottom:"1rem"}}>My Profile</div>
       <div className="profile-card">
         <div className="profile-top">
-          <div className="profile-avatar">{initials}</div>
+          <div className="profile-avatar-wrap">
+            {(avatarPreview || profile.avatar_url)
+              ? <img className="profile-avatar-img" src={avatarPreview||profile.avatar_url} alt="avatar" onError={e=>e.target.style.display="none"}/>
+              : <div className="profile-avatar">{initials}</div>
+            }
+            <label htmlFor="avatar-upload" className="profile-avatar-edit" title="Change photo">✏️</label>
+            <input type="file" id="avatar-upload" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f){setAvatarFile(f);setAvatarPreview(URL.createObjectURL(f))}}}/>
+          </div>
           <div>
             <div className="profile-name">{displayHandle}</div>
             <div className="profile-sub">{user.email}</div>
+            {(avatarPreview) && <div style={{fontSize:"0.68rem",color:"var(--terra2)",marginTop:"0.2rem"}}>New photo ready — tap Save Profile</div>}
           </div>
         </div>
       </div>
@@ -766,9 +792,19 @@ export default function App() {
       setUser(session?.user||null);
       setShowAuth(false);
       setAuthReady(true);
-      // Clean hash from URL after OAuth redirect
       if (window.location.hash && window.location.hash.includes("access_token")) {
         window.history.replaceState(null, "", window.location.pathname);
+      }
+      // Auto-save Google avatar on first sign-in
+      if (session?.user) {
+        const googleAvatar = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture;
+        if (googleAvatar) {
+          supabase.from("profiles").select("avatar_url").eq("id", session.user.id).single().then(({data})=>{
+            if (!data?.avatar_url) {
+              supabase.from("profiles").upsert({ id:session.user.id, email:session.user.email, avatar_url:googleAvatar });
+            }
+          });
+        }
       }
     });
     // Also check for existing session (non-redirect case)
