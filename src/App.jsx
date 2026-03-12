@@ -452,27 +452,23 @@ function ExploreScreen({ onSelectLocation, user, onSignIn, authReady }) {
   const [natF,setNatF]           = useState("All origins");
 
   useEffect(()=>{
-    if (!authReady) return;
-    const load = async (attempt=1) => {
-      try {
-        const {data,error} = await supabase.from("locations").select("*").order("avg_rating",{ascending:false});
-        if (error) { setError("DB error: " + error.message); setLoading(false); return; }
-        if (!data || data.length === 0) {
-          if (attempt < 4) { setTimeout(()=>load(attempt+1), attempt*800); return; }
-          setError("No locations returned from database.");
-          setLoading(false);
-        } else {
-          setLocations(data);
-          setError(null);
-          setLoading(false);
-        }
-      } catch(e) {
-        setError("Network error: " + e.message);
-        setLoading(false);
+    const SUPABASE_URL = 'https://hqbvbuhkkytzxkhpxkyw.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxYnZidWhra3l0enhraHB4a3l3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxOTk2NDYsImV4cCI6MjA4ODc3NTY0Nn0.L92vm6m7d8oyB8rz2Y6ly-j8IL4iAvrktR9Ch5mqFAA';
+    fetch(`${SUPABASE_URL}/rest/v1/locations?select=*&order=avg_rating.desc`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json'
       }
-    };
-    load();
-  },[authReady]);
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (Array.isArray(data) && data.length > 0) { setLocations(data); setError(null); }
+      else setError("No locations returned from database.");
+      setLoading(false);
+    })
+    .catch(e => { setError("Network error: " + e.message); setLoading(false); });
+  },[]);
 
   const results = locations.filter(l=>
     l.name.toLowerCase().includes(search.toLowerCase())||
