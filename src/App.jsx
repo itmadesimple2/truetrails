@@ -181,6 +181,14 @@ body { font-family: 'Outfit', sans-serif; background: #0f0e0c; color: #f2ede4; m
 .guest-btn { width:100%; background:none; border:none; color:var(--muted); font-family:'Outfit',sans-serif; font-size:0.78rem; cursor:pointer; padding:1rem 0 0; text-decoration:underline; }
 .sign-out-btn { width:100%; background:var(--raised); border:1px solid var(--border); border-radius:12px; padding:0.75rem; font-family:'Outfit',sans-serif; font-size:0.85rem; font-weight:500; color:var(--muted); cursor:pointer; margin-top:1rem; }
 .sign-out-btn:active { border-color:var(--terra); color:var(--terra); }
+.username-input-wrap { position:relative; }
+.username-prefix { position:absolute; left:0.85rem; top:50%; transform:translateY(-50%); color:var(--muted); font-size:0.88rem; pointer-events:none; }
+.username-input { padding-left:1.5rem !important; }
+.username-status { font-size:0.7rem; margin-top:0.3rem; font-weight:600; }
+.username-status.ok { color:var(--sage); }
+.username-status.err { color:var(--terra2); }
+.username-status.checking { color:var(--muted); }
+.username-setup-overlay { position:fixed; inset:0; background:var(--bg); z-index:800; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2rem 1.5rem; }
 .auth-required { background:var(--raised); border:1px solid var(--border); border-radius:16px; margin:1.5rem 1.25rem; padding:1.5rem; text-align:center; }
 .auth-required-icon { font-size:2rem; margin-bottom:0.75rem; }
 .auth-required-title { font-family:'Cormorant Garamond',serif; font-size:1.1rem; font-weight:600; color:var(--text); margin-bottom:0.4rem; }
@@ -289,8 +297,9 @@ function ReviewSheet({ location, onClose, onSubmit, user }) {
       const {data} = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (data) {
         setProfileData(data);
+        const displayName = data.username ? "@"+data.username : data.display_name || "";
         setForm(f=>({...f,
-          name: data.display_name || f.name,
+          name: displayName || f.name,
           age: data.age || f.age,
           nationality: data.nationality || f.nationality,
           travelStyle: data.travel_style || f.travelStyle,
@@ -616,24 +625,74 @@ function AuthScreen({ onClose }) {
   );
 }
 
+/* ── USERNAME CHECKER ── */
+async function checkUsername(username) {
+  if (!username || username.length < 3) return { ok:false, msg:"At least 3 characters required." };
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) return { ok:false, msg:"Only letters, numbers and underscores." };
+  // Check uniqueness
+  const { data } = await supabase.from("profiles").select("id").eq("username", username).maybeSingle();
+  if (data) return { ok:false, msg:"That username is already taken." };
+  // AI moderation
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:50,
+        messages:[{ role:"user", content:`Is the username "${username}" appropriate for a family-friendly travel review platform? Reply with only "APPROVED" or "REJECTED: <brief reason>".` }]
+      })
+    });
+    const json = await res.json();
+    const reply = json.content?.[0]?.text?.trim() || "APPROVED";
+    if (reply.startsWith("REJECTED")) return { ok:false, msg: "Username not allowed: " + reply.replace("REJECTED:","").trim() };
+  } catch(e) { /* if AI check fails, allow through */ }
+  return { ok:true, msg:"✓ Username available!" };
+}
+
 /* ── PROFILE SCREEN ── */
 function ProfileScreen({ user, onSignIn }) {
-  const [profile, setProfile] = useState({ display_name:"", age:"", nationality:"", travel_style:"Couple", youtube:"" });
+  const [profile, setProfile] = useState({ username:"", display_name:"", age:"", nationality:"", travel_style:"Couple", youtube:"" });
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState(null); // {ok, msg}
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const debounceRef = useRef(null);
 
   useEffect(()=>{
     if (!user) return;
     (async()=>{
       const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      if (data) setProfile({ display_name:data.display_name||"", age:data.age||"", nationality:data.nationality||"", travel_style:data.travel_style||"Couple", youtube:data.youtube||"" });
+      if (data) {
+        setProfile({ username:data.username||"", display_name:data.display_name||"", age:data.age||"", nationality:data.nationality||"", travel_style:data.travel_style||"Couple", youtube:data.youtube||"" });
+        setUsernameInput(data.username||"");
+      }
     })();
   },[user?.id]);
 
+  const handleUsernameChange = (val) => {
+    setUsernameInput(val);
+    setUsernameStatus(null);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!val) return;
+    // Skip check if unchanged from saved
+    if (val === profile.username) { setUsernameStatus({ok:true, msg:"✓ Your current username."}); return; }
+    setCheckingUsername(true);
+    debounceRef.current = setTimeout(async()=>{
+      const result = await checkUsername(val);
+      setUsernameStatus(result);
+      setCheckingUsername(false);
+    }, 700);
+  };
+
   const saveProfile = async () => {
     if (!user) return;
+    if (usernameInput && usernameInput !== profile.username && (!usernameStatus || !usernameStatus.ok)) return;
     setSaving(true);
-    await supabase.from("profiles").upsert({ id:user.id, email:user.email, ...profile, updated_at:new Date().toISOString() });
+    const updates = { id:user.id, email:user.email, ...profile, username:usernameInput||null, updated_at:new Date().toISOString() };
+    await supabase.from("profiles").upsert(updates);
+    setProfile(p=>({...p, username:usernameInput}));
     setSaving(false); setSaved(true); setTimeout(()=>setSaved(false), 2500);
   };
 
@@ -651,6 +710,7 @@ function ProfileScreen({ user, onSignIn }) {
     </div></div>
   );
 
+  const displayHandle = profile.username ? "@"+profile.username : profile.display_name || "Set your username";
   const initials = (profile.display_name||user.email||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
   return (
     <div className="scroll-area"><div className="profile-wrap">
@@ -658,13 +718,26 @@ function ProfileScreen({ user, onSignIn }) {
       <div className="profile-card">
         <div className="profile-top">
           <div className="profile-avatar">{initials}</div>
-          <div><div className="profile-name">{profile.display_name||"Set your name"}</div><div className="profile-sub">{user.email}</div></div>
+          <div>
+            <div className="profile-name">{displayHandle}</div>
+            <div className="profile-sub">{user.email}</div>
+          </div>
         </div>
       </div>
       <div className="no-sponsorship-badge"><div className="nsb-icon">🛡️</div><div><div className="nsb-title">No-Sponsorship Pledge</div><div className="nsb-text">You have pledged to never accept payment, free stays, or incentives in exchange for reviews on TrueTrails.</div></div></div>
       <div className="section-head">Edit Profile</div>
       <div style={{display:"flex",flexDirection:"column",gap:"0.9rem"}}>
-        <div className="form-group"><label className="form-label">Display Name</label><input className="form-input" placeholder="e.g. Margaret T." value={profile.display_name} onChange={e=>setProfile(p=>({...p,display_name:e.target.value}))}/></div>
+        <div className="form-group">
+          <label className="form-label">Username <span style={{color:"var(--muted)",fontWeight:400}}>(shown on reviews)</span></label>
+          <div className="username-input-wrap">
+            <span className="username-prefix">@</span>
+            <input className="form-input username-input" placeholder="e.g. adventurer_tony" value={usernameInput} onChange={e=>handleUsernameChange(e.target.value.toLowerCase().replace(/\s/g,"_"))}/>
+          </div>
+          {checkingUsername && <div className="username-status checking">Checking…</div>}
+          {!checkingUsername && usernameStatus && <div className={`username-status ${usernameStatus.ok?"ok":"err"}`}>{usernameStatus.msg}</div>}
+          <div style={{fontSize:"0.68rem",color:"var(--muted)",marginTop:"0.3rem"}}>Letters, numbers and underscores only. This is what other travellers will see.</div>
+        </div>
+        <div className="form-group"><label className="form-label">Display Name <span style={{color:"var(--muted)",fontWeight:400}}>(optional)</span></label><input className="form-input" placeholder="e.g. Margaret T." value={profile.display_name} onChange={e=>setProfile(p=>({...p,display_name:e.target.value}))}/></div>
         <div className="form-row">
           <div className="form-group"><label className="form-label">Age Group</label><select className="form-select" value={profile.age} onChange={e=>setProfile(p=>({...p,age:e.target.value}))}><option value="">Select…</option>{["Under 35","35–49","50–54","55–64","65+"].map(a=><option key={a}>{a}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Nationality</label><select className="form-select" value={profile.nationality} onChange={e=>setProfile(p=>({...p,nationality:e.target.value}))}><option value="">Select…</option>{NAT_OPTS.slice(1).map(n=><option key={n}>{n}</option>)}</select></div>
@@ -672,7 +745,7 @@ function ProfileScreen({ user, onSignIn }) {
         <div className="form-group"><label className="form-label">Travel Style</label><select className="form-select" value={profile.travel_style} onChange={e=>setProfile(p=>({...p,travel_style:e.target.value}))}>{STYLE_OPTS.slice(1).map(s=><option key={s}>{s}</option>)}</select></div>
         <div className="form-group"><label className="form-label">YouTube / Blog URL (optional)</label><input className="form-input" placeholder="https://…" value={profile.youtube} onChange={e=>setProfile(p=>({...p,youtube:e.target.value}))}/></div>
         {saved && <div className="auth-success">✓ Profile saved!</div>}
-        <button className="submit-btn" onClick={saveProfile} disabled={saving}>{saving?"Saving…":"Save Profile"}</button>
+        <button className="submit-btn" onClick={saveProfile} disabled={saving||checkingUsername}>{saving?"Saving…":"Save Profile"}</button>
         <button className="sign-out-btn" onClick={signOut}>Sign out</button>
       </div>
     </div></div>
