@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase.js";
 
+const ADMIN_ID = "7c786021-d4f8-4ba1-924c-8eecc4f119ea";
+
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Outfit:wght@300;400;500;600&display=swap');`;
 
 const CSS = `
@@ -154,6 +156,23 @@ body { font-family: 'Outfit', sans-serif; background: #0f0e0c; color: #f2ede4; m
 .suggest-pending-meta { font-size:0.68rem; color:var(--muted); }
 .suggest-btn { display:flex; align-items:center; gap:0.5rem; background:var(--raised); border:1.5px solid var(--border); border-radius:10px; padding:0.6rem 1rem; font-family:'Outfit',sans-serif; font-size:0.78rem; font-weight:600; color:var(--sub); cursor:pointer; margin:0 1.25rem 0.75rem; width:calc(100% - 2.5rem); }
 .suggest-btn:active { border-color:var(--terra); color:var(--terra); }
+.admin-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:0.85rem; }
+.admin-card-img { width:100%; height:140px; object-fit:cover; display:block; }
+.admin-card-img-placeholder { width:100%; height:80px; background:var(--raised); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.78rem; }
+.admin-card-body { padding:0.85rem; }
+.admin-card-title { font-family:'Cormorant Garamond',serif; font-size:1rem; font-weight:600; color:var(--text); margin-bottom:0.25rem; }
+.admin-card-meta { font-size:0.68rem; color:var(--muted); margin-bottom:0.6rem; }
+.admin-card-desc { font-size:0.75rem; color:var(--sub); line-height:1.6; margin-bottom:0.75rem; }
+.admin-btn-row { display:flex; gap:0.5rem; }
+.admin-btn { flex:1; padding:0.55rem; border-radius:8px; border:none; font-family:'Outfit',sans-serif; font-size:0.78rem; font-weight:600; cursor:pointer; }
+.admin-btn.approve { background:var(--sage); color:white; }
+.admin-btn.reject { background:var(--raised); border:1px solid var(--border); color:var(--muted); }
+.admin-section-title { font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:700; color:var(--text); margin:1.25rem 0 0.75rem; padding-bottom:0.5rem; border-bottom:1px solid var(--border); }
+.admin-empty { font-size:0.78rem; color:var(--muted); text-align:center; padding:1.5rem; }
+.admin-badge { display:inline-block; font-size:0.6rem; padding:0.15rem 0.45rem; border-radius:4px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; margin-left:0.5rem; }
+.admin-badge.photo { background:rgba(122,171,125,0.2); color:var(--sage); }
+.admin-badge.destination { background:rgba(201,168,76,0.2); color:var(--gold); }
+.admin-badge.experience { background:rgba(232,132,90,0.2); color:var(--terra2); }
 .carousel-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:600; display:flex; flex-direction:column; }
 .carousel-topbar { display:flex; align-items:center; justify-content:space-between; padding:calc(var(--safe-top) + 0.75rem) 1.25rem 0.75rem; flex-shrink:0; }
 .carousel-counter { font-size:0.8rem; color:rgba(255,255,255,0.6); font-weight:500; }
@@ -948,6 +967,95 @@ function ProfileScreen({ user, onSignIn }) {
   );
 }
 
+/* ── ADMIN SCREEN ── */
+function AdminScreen({ user }) {
+  const [photos, setPhotos]       = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [msg, setMsg]             = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: p }, { data: s }] = await Promise.all([
+      supabase.from("location_photos").select("*, locations(name)").eq("status","pending").order("created_at",{ascending:false}),
+      supabase.from("suggestions").select("*").eq("status","pending").order("created_at",{ascending:false})
+    ]);
+    setPhotos(p||[]); setSuggestions(s||[]);
+    setLoading(false);
+  };
+
+  useEffect(()=>{ load(); },[]);
+
+  const approvePhoto = async (photo) => {
+    await supabase.from("location_photos").update({status:"approved"}).eq("id",photo.id);
+    await supabase.from("locations").update({hero_image_url:photo.photo_url}).eq("id",photo.location_id);
+    setMsg("✓ Photo approved and set as hero image!");
+    setTimeout(()=>setMsg(null),3000);
+    load();
+  };
+
+  const rejectPhoto = async (id) => {
+    await supabase.from("location_photos").update({status:"rejected"}).eq("id",id);
+    load();
+  };
+
+  const approveSuggestion = async (id) => {
+    await supabase.from("suggestions").update({status:"approved"}).eq("id",id);
+    setMsg("✓ Suggestion approved!");
+    setTimeout(()=>setMsg(null),3000);
+    load();
+  };
+
+  const rejectSuggestion = async (id) => {
+    await supabase.from("suggestions").update({status:"rejected"}).eq("id",id);
+    load();
+  };
+
+  if (!user || user.id !== ADMIN_ID) return (
+    <div className="scroll-area"><div className="profile-wrap">
+      <div className="auth-required"><div className="auth-required-icon">🔒</div><div className="auth-required-title">Admin only</div></div>
+    </div></div>
+  );
+
+  return (
+    <div className="scroll-area"><div className="profile-wrap">
+      <div className="section-head" style={{marginBottom:"0.25rem"}}>Admin Panel</div>
+      {msg && <div className="auth-success" style={{marginBottom:"1rem"}}>✓ {msg}</div>}
+      {loading ? <div className="loading-wrap"><div className="dot-row"><span/><span/><span/></div></div> : <>
+        <div className="admin-section-title">📷 Photo Suggestions <span style={{fontSize:"0.8rem",color:"var(--muted)",fontFamily:"'Outfit',sans-serif",fontWeight:400}}>({photos.length} pending)</span></div>
+        {photos.length===0 ? <div className="admin-empty">No pending photos</div> : photos.map(p=>(
+          <div key={p.id} className="admin-card">
+            <img className="admin-card-img" src={p.photo_url} alt="suggested" onError={e=>e.target.style.display="none"}/>
+            <div className="admin-card-body">
+              <div className="admin-card-title">{p.locations?.name}</div>
+              <div className="admin-card-meta">By {p.username} · {new Date(p.created_at).toLocaleDateString()}</div>
+              <div className="admin-btn-row">
+                <button className="admin-btn approve" onClick={()=>approvePhoto(p)}>✓ Approve as hero</button>
+                <button className="admin-btn reject" onClick={()=>rejectPhoto(p.id)}>✕ Reject</button>
+              </div>
+            </div>
+          </div>
+        ))}
+        <div className="admin-section-title">💡 Suggestions <span style={{fontSize:"0.8rem",color:"var(--muted)",fontFamily:"'Outfit',sans-serif",fontWeight:400}}>({suggestions.length} pending)</span></div>
+        {suggestions.length===0 ? <div className="admin-empty">No pending suggestions</div> : suggestions.map(s=>(
+          <div key={s.id} className="admin-card">
+            <div className="admin-card-body">
+              <div className="admin-card-title">{s.title}<span className={`admin-badge ${s.type}`}>{s.type}</span></div>
+              <div className="admin-card-meta">By {s.username} · {s.region} · {new Date(s.created_at).toLocaleDateString()}</div>
+              <div className="admin-card-desc">{s.description}</div>
+              {s.tags?.length>0 && <div className="dest-tags" style={{marginBottom:"0.75rem"}}>{s.tags.map(t=><span key={t} className="tag">{t}</span>)}</div>}
+              <div className="admin-btn-row">
+                <button className="admin-btn approve" onClick={()=>approveSuggestion(s.id)}>✓ Approve</button>
+                <button className="admin-btn reject" onClick={()=>rejectSuggestion(s.id)}>✕ Reject</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </>}
+    </div></div>
+  );
+}
+
 /* ── ROOT ── */
 export default function App() {
   const [tab,setTab]                 = useState("explore");
@@ -955,6 +1063,7 @@ export default function App() {
   const [user,setUser]               = useState(null);
   const [authReady,setAuthReady]     = useState(false);
   const [showAuth,setShowAuth]       = useState(false);
+  const isAdmin = user?.id === ADMIN_ID;
 
   useEffect(()=>{
     // onAuthStateChange fires first with the session from the URL hash (OAuth redirect)
