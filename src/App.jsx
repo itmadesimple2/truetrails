@@ -443,7 +443,7 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
 }
 
 /* ── EXPLORE SCREEN ── */
-function ExploreScreen({ onSelectLocation }) {
+function ExploreScreen({ onSelectLocation, user, onSignIn, authReady }) {
   const [locations,setLocations] = useState([]);
   const [loading,setLoading]     = useState(true);
   const [error,setError]         = useState(null);
@@ -452,18 +452,27 @@ function ExploreScreen({ onSelectLocation }) {
   const [natF,setNatF]           = useState("All origins");
 
   useEffect(()=>{
-    (async()=>{
+    if (!authReady) return;
+    const load = async (attempt=1) => {
       try {
         const {data,error} = await supabase.from("locations").select("*").order("avg_rating",{ascending:false});
-        if (error) { setError("DB error: " + error.message); }
-        else if (!data || data.length === 0) { setError("No locations returned from database."); }
-        else setLocations(data);
+        if (error) { setError("DB error: " + error.message); setLoading(false); return; }
+        if (!data || data.length === 0) {
+          if (attempt < 4) { setTimeout(()=>load(attempt+1), attempt*800); return; }
+          setError("No locations returned from database.");
+          setLoading(false);
+        } else {
+          setLocations(data);
+          setError(null);
+          setLoading(false);
+        }
       } catch(e) {
         setError("Network error: " + e.message);
+        setLoading(false);
       }
-      setLoading(false);
-    })();
-  },[]);
+    };
+    load();
+  },[authReady]);
 
   const results = locations.filter(l=>
     l.name.toLowerCase().includes(search.toLowerCase())||
@@ -692,7 +701,7 @@ export default function App() {
             </div>
           </div>
         )}
-        {tab==="explore" && <ExploreScreen onSelectLocation={handleSelect} user={user} onSignIn={()=>setShowAuth(true)}/>}
+        {tab==="explore" && <ExploreScreen onSelectLocation={handleSelect} user={user} onSignIn={()=>setShowAuth(true)} authReady={authReady}/>}
         {tab==="detail"  && selectedLoc && <DetailScreen location={selectedLoc} onBack={handleBack} user={user} onSignIn={()=>setShowAuth(true)}/>}
         {tab==="profile" && <ProfileScreen user={user} onSignIn={()=>setShowAuth(true)}/>}
         {tab!=="detail" && <div className="bottom-nav">{[{id:"explore",icon:"🗺️",label:"Explore"},{id:"profile",icon:"👤",label:"Profile"}].map(n=><button key={n.id} className={`nav-item ${tab===n.id?"active":""}`} onClick={()=>setTab(n.id)}><span className="nav-icon">{n.icon}</span><span className="nav-label">{n.label}</span></button>)}</div>}
