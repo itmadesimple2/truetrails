@@ -271,16 +271,36 @@ function ImageCarousel({ images, startIndex=0, onClose }) {
 }
 
 /* ── REVIEW SHEET ── */
-function ReviewSheet({ location, onClose, onSubmit }) {
+function ReviewSheet({ location, onClose, onSubmit, user }) {
+  const [profile, setProfileData] = useState(null);
   const [form, setForm] = useState({name:"",age:"",nationality:"",travelStyle:"Couple",rating:0,title:"",body:"",youtube:"",imageUrl:""});
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  const [imageMode, setImageMode] = useState("upload"); // "upload" or "link"
+  const [imageMode, setImageMode] = useState("upload");
   const [hover, setHover] = useState(0);
   const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
-  const valid = form.name && form.age && form.nationality && form.rating>0 && form.title && form.body.length>30;
   const [submitError, setSubmitError] = useState(null);
+
+  // Load profile and pre-fill form
+  useEffect(()=>{
+    if (!user) return;
+    (async()=>{
+      const {data} = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      if (data) {
+        setProfileData(data);
+        setForm(f=>({...f,
+          name: data.display_name || f.name,
+          age: data.age || f.age,
+          nationality: data.nationality || f.nationality,
+          travelStyle: data.travel_style || f.travelStyle,
+        }));
+      }
+    })();
+  },[user?.id]);
+
+  const profileComplete = profile && profile.display_name && profile.age && profile.nationality;
+  const valid = form.name && form.age && form.nationality && form.rating>0 && form.title && form.body.length>30;
   const submit = async () => {
     if (!valid) return;
     setSaving(true);
@@ -315,14 +335,24 @@ function ReviewSheet({ location, onClose, onSubmit }) {
         </div>
         <div className="sheet-title">Write a Review</div>
         <div className="sheet-sub">Reviewing <strong style={{color:"var(--terra2)"}}>{location.name}</strong> — honest experiences only.</div>
-        <div className="form-row">
-          <div className="form-group"><label className="form-label">Your Name</label><input className="form-input" placeholder="e.g. Margaret T." value={form.name} onChange={e=>set("name",e.target.value)}/></div>
-          <div className="form-group"><label className="form-label">Age Group</label><select className="form-select" value={form.age} onChange={e=>set("age",e.target.value)}><option value="">Select…</option>{["Under 35","35–49","50–54","55–64","65+"].map(a=><option key={a}>{a}</option>)}</select></div>
-        </div>
-        <div className="form-row">
+        {profileComplete ? (
+          <div style={{background:"var(--raised)",border:"1px solid var(--border)",borderRadius:"12px",padding:"0.75rem 1rem",marginBottom:"0.5rem",display:"flex",alignItems:"center",gap:"0.75rem"}}>
+            <div className="avatar" style={{background:"var(--terra)",width:"36px",height:"36px",fontSize:"0.8rem",flexShrink:0}}>{form.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</div>
+            <div>
+              <div style={{fontSize:"0.85rem",fontWeight:600,color:"var(--text)"}}>{form.name}</div>
+              <div style={{fontSize:"0.72rem",color:"var(--muted)"}}>{form.age} · {form.nationality}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Your Name</label><input className="form-input" placeholder="e.g. Margaret T." value={form.name} onChange={e=>set("name",e.target.value)}/></div>
+            <div className="form-group"><label className="form-label">Age Group</label><select className="form-select" value={form.age} onChange={e=>set("age",e.target.value)}><option value="">Select…</option>{["Under 35","35–49","50–54","55–64","65+"].map(a=><option key={a}>{a}</option>)}</select></div>
+          </div>
+        )}
+        {!profileComplete && (
           <div className="form-group"><label className="form-label">Nationality</label><select className="form-select" value={form.nationality} onChange={e=>set("nationality",e.target.value)}><option value="">Select…</option>{NAT_OPTS.slice(1).map(n=><option key={n}>{n}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Travel Style</label><select className="form-select" value={form.travelStyle} onChange={e=>set("travelStyle",e.target.value)}>{STYLE_OPTS.slice(1).map(s=><option key={s}>{s}</option>)}</select></div>
-        </div>
+        )}
+        <div className="form-group"><label className="form-label">Travel Style</label><select className="form-select" value={form.travelStyle} onChange={e=>set("travelStyle",e.target.value)}>{STYLE_OPTS.slice(1).map(s=><option key={s}>{s}</option>)}</select></div>
         <div className="form-group"><label className="form-label">Your Rating</label><div className="star-row">{[1,2,3,4,5].map(n=><button key={n} className={`star-tap ${n<=(hover||form.rating)?"lit":""}`} onClick={()=>set("rating",n)} onMouseEnter={()=>setHover(n)} onMouseLeave={()=>setHover(0)}>★</button>)}</div></div>
         <div className="form-group"><label className="form-label">Review Title</label><input className="form-input" placeholder="Sum up your honest experience" value={form.title} onChange={e=>set("title",e.target.value)}/></div>
         <div className="form-group"><div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:"0.4rem"}}><label className="form-label" style={{marginBottom:0}}>Your Review</label><span style={{fontSize:"0.65rem",color:form.body.length>=30?"var(--sage)":"var(--terra2)",fontWeight:600}}>{form.body.length>=30?"✓ Good length":`${30-form.body.length} more chars needed`}</span></div><textarea className="form-textarea" placeholder="Share what you genuinely experienced — good and bad. Practical details other travellers your age would value." value={form.body} onChange={e=>set("body",e.target.value)} rows={5}/></div>
@@ -435,7 +465,7 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
         )}
       </div>
       <button className="fab" onClick={()=>{ if(user) setShowSheet(true); else onSignIn(); }} title={user?"Write a review":"Sign in to write a review"}>+</button>
-      {showSheet && <ReviewSheet location={location} onClose={()=>setShowSheet(false)} onSubmit={handleSubmit}/>}
+      {showSheet && <ReviewSheet location={location} onClose={()=>setShowSheet(false)} onSubmit={handleSubmit} user={user}/>}
       {toast && <div className="toast">✓ Your review has been saved!</div>}
       {carousel && <ImageCarousel images={carousel.images} startIndex={carousel.startIndex} onClose={()=>setCarousel(null)}/>}
     </>
