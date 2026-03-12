@@ -521,7 +521,7 @@ function AuthScreen({ onClose }) {
     setLoading(true); setError(null);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.href }
+      options: { redirectTo: "https://truetrails.netlify.app" }
     });
     if (error) { setError(error.message); setLoading(false); }
   };
