@@ -351,7 +351,10 @@ function ReviewSheet({ location, onClose, onSubmit, user }) {
         <div className="sheet-sub">Reviewing <strong style={{color:"var(--terra2)"}}>{location.name}</strong> — honest experiences only.</div>
         {profileComplete ? (
           <div style={{background:"var(--raised)",border:"1px solid var(--border)",borderRadius:"12px",padding:"0.75rem 1rem",marginBottom:"0.5rem",display:"flex",alignItems:"center",gap:"0.75rem"}}>
-            <div className="avatar" style={{background:"var(--terra)",width:"36px",height:"36px",fontSize:"0.8rem",flexShrink:0}}>{form.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</div>
+            {form.avatarUrl
+              ? <img src={form.avatarUrl} style={{width:"36px",height:"36px",borderRadius:"50%",objectFit:"cover",flexShrink:0,border:"2px solid var(--border)"}} onError={e=>e.target.style.display="none"}/>
+              : <div className="avatar" style={{background:"var(--terra)",width:"36px",height:"36px",fontSize:"0.8rem",flexShrink:0}}>{form.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</div>
+            }
             <div>
               <div style={{fontSize:"0.85rem",fontWeight:600,color:"var(--text)"}}>{form.name}</div>
               <div style={{fontSize:"0.72rem",color:"var(--muted)"}}>{form.age} · {form.nationality}</div>
