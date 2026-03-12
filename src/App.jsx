@@ -1118,7 +1118,21 @@ export default function App() {
         {tab==="explore" && <ExploreScreen onSelectLocation={handleSelect} user={user} onSignIn={()=>setShowAuth(true)} authReady={authReady}/>}
         {tab==="detail"  && selectedLoc && <DetailScreen location={selectedLoc} onBack={handleBack} user={user} onSignIn={()=>setShowAuth(true)}/>}
         {tab==="profile" && <ProfileScreen user={user} onSignIn={()=>setShowAuth(true)}/>}
-        {tab!=="detail" && <div className="bottom-nav">{[{id:"explore",icon:"🗺️",label:"Explore"},{id:"profile",icon:"👤",label:"Profile"}].map(n=><button key={n.id} className={`nav-item ${tab===n.id?"active":""}`} onClick={()=>setTab(n.id)}><span className="nav-icon">{n.icon}</span><span className="nav-label">{n.label}</span></button>)}</div>}
+        {tab==="admin"   && <AdminScreen user={user}/>}
+        {tab!=="detail" && (
+          <div className="bottom-nav">
+            {[
+              {id:"explore",icon:"🗺️",label:"Explore"},
+              {id:"profile",icon:"👤",label:"Profile"},
+              ...(isAdmin?[{id:"admin",icon:"🛡️",label:"Admin"}]:[])
+            ].map(n=>(
+              <button key={n.id} className={`nav-item ${tab===n.id?"active":""}`} onClick={()=>setTab(n.id)}>
+                <span className="nav-icon">{n.icon}</span>
+                <span className="nav-label">{n.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {showAuth && <AuthScreen onClose={()=>setShowAuth(false)}/>}
     </>
