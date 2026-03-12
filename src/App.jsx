@@ -619,7 +619,14 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
       <div className="scroll-area">
         {locationData.hero_image_url && (
           <div className="detail-hero-img-wrap">
-            <img className="detail-hero-img" src={locationData.hero_image_url} alt={locationData.name} onError={e=>e.target.parentElement.style.display="none"}/>
+            <img
+              className="detail-hero-img"
+              src={locationData.hero_image_url}
+              alt={locationData.name}
+              style={{cursor:"zoom-in"}}
+              onClick={()=>setCarousel({images:[{image_url:locationData.hero_image_url, name:locationData.name, nationality:locationData.region, age:"", travel_style:"", title:"Hero photo for "+locationData.name}], startIndex:0})}
+              onError={e=>e.target.parentElement.style.display="none"}
+            />
             {user && <button className="suggest-photo-btn" onClick={()=>setShowPhotoSuggest(true)}>📷 Suggest better photo</button>}
           </div>
         )}
