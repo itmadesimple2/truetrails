@@ -648,6 +648,10 @@ export default function App() {
   const [showAuth,setShowAuth]       = useState(false);
 
   useEffect(()=>{
+    // Clean up OAuth hash from URL without triggering reload
+    if (window.location.hash && window.location.hash.includes("access_token")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     supabase.auth.getSession().then(({data:{session}})=>{ setUser(session?.user||null); setAuthReady(true); });
     const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session)=>{ setUser(session?.user||null); setShowAuth(false); });
     return ()=>subscription.unsubscribe();
