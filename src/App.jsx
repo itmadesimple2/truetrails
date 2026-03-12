@@ -648,12 +648,21 @@ export default function App() {
   const [showAuth,setShowAuth]       = useState(false);
 
   useEffect(()=>{
-    // Clean up OAuth hash from URL without triggering reload
-    if (window.location.hash && window.location.hash.includes("access_token")) {
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-    supabase.auth.getSession().then(({data:{session}})=>{ setUser(session?.user||null); setAuthReady(true); });
-    const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session)=>{ setUser(session?.user||null); setShowAuth(false); });
+    // onAuthStateChange fires first with the session from the URL hash (OAuth redirect)
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_event, session)=>{
+      setUser(session?.user||null);
+      setShowAuth(false);
+      setAuthReady(true);
+      // Clean hash from URL after OAuth redirect
+      if (window.location.hash && window.location.hash.includes("access_token")) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    });
+    // Also check for existing session (non-redirect case)
+    supabase.auth.getSession().then(({data:{session}})=>{
+      setUser(session?.user||null);
+      setAuthReady(true);
+    });
     return ()=>subscription.unsubscribe();
   },[]);
 
