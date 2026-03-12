@@ -578,7 +578,8 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
   const [styleF,setStyleF]     = useState("All styles");
   const [showSheet,setShowSheet] = useState(false);
   const [toast,setToast]       = useState(false);
-  const [stats,setStats]       = useState({avg_rating:location.avg_rating, review_count:location.review_count});
+  const [stats,setStats]         = useState({avg_rating:location.avg_rating, review_count:location.review_count});
+  const [locationData,setLocationData] = useState(location);
   const [carousel,setCarousel]   = useState(null);
   const [showSuggest,setShowSuggest] = useState(false);
   const [showPhotoSuggest,setShowPhotoSuggest] = useState(false);
@@ -586,8 +587,13 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
   useEffect(()=>{
     (async()=>{
       setLoading(true);
-      const {data} = await supabase.from("reviews").select("*").eq("location_id",location.id).order("created_at",{ascending:false});
-      setReviews(data||[]);
+      // Always fetch fresh location data (hero image may have been approved)
+      const [{data:locData},{data:reviewData}] = await Promise.all([
+        supabase.from("locations").select("*").eq("id",location.id).single(),
+        supabase.from("reviews").select("*").eq("location_id",location.id).order("created_at",{ascending:false})
+      ]);
+      if (locData) { setLocationData(locData); setStats({avg_rating:locData.avg_rating, review_count:locData.review_count}); }
+      setReviews(reviewData||[]);
       setLoading(false);
     })();
   },[location.id]);
@@ -611,17 +617,17 @@ function DetailScreen({ location, onBack, user, onSignIn }) {
         <button className="icon-btn" onClick={()=>setShowSheet(true)}>✏️</button>
       </div>
       <div className="scroll-area">
-        {location.hero_image_url && (
+        {locationData.hero_image_url && (
           <div className="detail-hero-img-wrap">
-            <img className="detail-hero-img" src={location.hero_image_url} alt={location.name} onError={e=>e.target.parentElement.style.display="none"}/>
+            <img className="detail-hero-img" src={locationData.hero_image_url} alt={locationData.name} onError={e=>e.target.parentElement.style.display="none"}/>
             {user && <button className="suggest-photo-btn" onClick={()=>setShowPhotoSuggest(true)}>📷 Suggest better photo</button>}
           </div>
         )}
-        {!location.hero_image_url && user && (
+        {!locationData.hero_image_url && user && (
           <div style={{padding:"0.5rem 1.25rem 0"}}><button className="suggest-btn" onClick={()=>setShowPhotoSuggest(true)}>📷 Add a photo for this destination</button></div>
         )}
         <div className="detail-hero">
-          <div className="detail-region">{location.region}</div>
+          <div className="detail-region">{locationData.region}</div>
           <div className="detail-title">{location.name}</div>
           <div className="detail-stats">
             <div className="stat-item"><div className="stat-stars"><Stars n={Math.round(stats.avg_rating)} size="1rem"/></div><div className="stat-label">{stats.avg_rating} avg</div></div>
