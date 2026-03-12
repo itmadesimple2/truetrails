@@ -453,9 +453,14 @@ function ExploreScreen({ onSelectLocation }) {
 
   useEffect(()=>{
     (async()=>{
-      const {data,error} = await supabase.from("locations").select("*").order("avg_rating",{ascending:false});
-      if (error) setError(error.message);
-      else setLocations(data||[]);
+      try {
+        const {data,error} = await supabase.from("locations").select("*").order("avg_rating",{ascending:false});
+        if (error) { setError("DB error: " + error.message); }
+        else if (!data || data.length === 0) { setError("No locations returned from database."); }
+        else setLocations(data);
+      } catch(e) {
+        setError("Network error: " + e.message);
+      }
       setLoading(false);
     })();
   },[]);
