@@ -284,7 +284,7 @@ function ImageCarousel({ images, startIndex=0, onClose }) {
 
 /* ── REVIEW SHEET ── */
 function ReviewSheet({ location, onClose, onSubmit, user }) {
-  const [profile, setProfileData] = useState(null);
+  const [profileData, setProfileData] = useState(null);
   const [form, setForm] = useState({name:"",age:"",nationality:"",travelStyle:"Couple",rating:0,title:"",body:"",youtube:"",imageUrl:"",avatarUrl:""});
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -313,7 +313,7 @@ function ReviewSheet({ location, onClose, onSubmit, user }) {
     })();
   },[user?.id]);
 
-  const profileComplete = profile && profile.display_name && profile.age && profile.nationality;
+  const profileComplete = profileData && profileData.age && profileData.nationality && (profileData.username || profileData.display_name);
   const valid = form.name && form.age && form.nationality && form.rating>0 && form.title && form.body.length>30;
   const submit = async () => {
     if (!valid) return;
